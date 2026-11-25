@@ -1,0 +1,35 @@
+{
+ "name": "dance_punch",
+ "cut_beats": {
+  "fast": [
+   1,
+   1,
+   2
+  ],
+  "groove": [
+   2,
+   2,
+   4
+  ],
+  "artistic": [
+   4
+  ]
+ },
+ "speed": {
+  "fast": 1.0,
+  "groove": 1.0,
+  "artistic": 1.0
+ },
+ "align": {
+  "fast": "peak",
+  "groove": "peak",
+  "artistic": "peak"
+ },
+ "drop_effect": {
+  "zoom": 1.0,
+  "flash": false
+ },
+ "lift_lead": 0.6,
+ "hook_seconds": 1.5,
+ "length": 25
+}

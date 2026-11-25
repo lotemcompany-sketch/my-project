@@ -28,6 +28,8 @@ h2{font-size:.8rem;font-weight:700;color:var(--mut);letter-spacing:.06em;text-tr
 .top .meta{color:var(--mut);display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.95rem}
 .top .meta b{color:var(--fg);font-variant-numeric:tabular-nums}
 .sp{flex:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#opt{font-weight:700;font-family:var(--display);min-width:0;max-width:100%}
 .status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--sunk);font-weight:600;font-size:.9rem}
 .status i{width:8px;height:8px;border-radius:50%;background:var(--mut)}
 .status[data-s="render_requested"] i,.status[data-s="rendering"] i{background:var(--warn)}
@@ -89,6 +91,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="wrap" dir="rtl" lang="he">
   <div class="top">
     <h1>BeatCut Studio</h1>
+    <label for="opt" class="sr">אופציה</label><select id="opt" hidden></select>
     <div class="meta"><span id="m-title">טוען…</span><span>טמפו <b id="m-tempo">–</b> BPM</span><span>חיתוכים <b id="m-cuts">–</b></span><span>אורך <b id="m-len">–</b></span></div>
     <span class="sp"></span>
     <span class="status" id="status" data-s="draft"><i></i><span id="status-t">טיוטה</span></span>
@@ -158,18 +161,30 @@ const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,2600)}
 function win(){const T=P.timeline;return [T[0].start,T.at(-1).end]}
 
+let OPTS=null, unsub=null;
 async function boot(){
-  P=await (await fetch('project.json')).json();
-  orig=JSON.parse(JSON.stringify(P.timeline));
-  song.src=P.song.src;
+  try{const r=await fetch('index.json');if(r.ok)OPTS=await r.json()}catch(e){}
+  if(OPTS&&OPTS.length){
+    const o=$('#opt');o.hidden=false;
+    for(const x of OPTS){const op=document.createElement('option');op.value=x.id;op.textContent=x.label;o.append(op)}
+    o.onchange=()=>load('options/'+o.value+'.json');
+    await load('options/'+OPTS[0].id+'.json');
+  }else await load('project.json');
+}
+async function load(url){
+  stop();
+  P=await (await fetch(url)).json();
+  orig=JSON.parse(JSON.stringify(P.timeline));sel=-1;curSeg=-1;dirty=false;remote={};
+  song.src=P.song.src;$('#final-v').removeAttribute('src');$('#save-note').textContent='';
   refresh();
   connect();
 }
 async function connect(){
-  db=window.claude?await window.claude.use('db'):null;
+  if(!db)db=window.claude?await window.claude.use('db'):null;
+  if(unsub){unsub();unsub=null}
   if(!db){$('#save-note').textContent='כדי לשמור עריכות צריך להיות מחובר ל-claude.ai.';return}
   docRef=db.doc('projects/'+(P.id||'demo'));
-  docRef.onSnapshot(s=>{
+  unsub=docRef.onSnapshot(s=>{
     remote=s.exists?s.data():{};
     if(remote.timeline&&!dirty){P.timeline=JSON.parse(JSON.stringify(remote.timeline));curSeg=-1;refresh()}
     showStatus();
@@ -180,10 +195,10 @@ function touch(){dirty=true;$('#save-note').textContent='יש שינויים ש�
 function showStatus(){
   const s=remote.status||'draft';$('#status').dataset.s=s;$('#status-t').textContent=STATUS[s]||s;
   $('#b-render').disabled=s==='render_requested'||s==='rendering';
-  const showFinal=s==='ready'||P.hasFinal;
+  const showFinal=s==='ready'||P.hasFinal||!!P.final;
   $('#final').hidden=!showFinal;
   if(showFinal){
-    if(!$('#final-v').src)$('#final-v').src='final.mp4';
+    if(!$('#final-v').getAttribute('src'))$('#final-v').src=P.final||'final.mp4';
     $('#final-p').textContent=remote.message||'זה הסרטון שהכלי ערך לבד, באיכות צפייה. הקובץ המלא נשמר בתיקייה BeatCut/מוכנים בדרייב.';
   }
 }

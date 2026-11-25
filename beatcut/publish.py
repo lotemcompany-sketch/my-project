@@ -47,3 +47,29 @@ def import_edits(proj_dir, timeline):
     proj["timeline"] = [dict(s, clip=back.get(s["clip"], s["clip"])) for s in timeline]
     Path(proj_dir, "project.json").write_text(json.dumps(proj, ensure_ascii=False, indent=1), encoding="utf-8")
     return proj
+
+
+def export_options(options, out_dir):
+    """options: [(proj_dir, option_id, label)] -> site with shared media/ and options/<id>.json + index.json"""
+    out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+    index = []
+    for proj_dir, oid, label in options:
+        tmp = out / "_tmp" / oid
+        export(proj_dir, tmp, title=label)
+        for sub in ("media", "thumbs"):
+            (out / sub).mkdir(exist_ok=True)
+            for f in (tmp / sub).iterdir():
+                shutil.copy(f, out / sub / f.name)
+        pj = json.loads((tmp / "project.json").read_text(encoding="utf-8"))
+        song_name = f"songs/{oid}.mp3"; (out / "songs").mkdir(exist_ok=True)
+        shutil.copy(tmp / "song.mp3", out / song_name); pj["song"]["src"] = song_name
+        if (tmp / "final.mp4").exists():
+            (out / "finals").mkdir(exist_ok=True); shutil.copy(tmp / "final.mp4", out / f"finals/{oid}.mp4")
+            pj["final"] = f"finals/{oid}.mp4"
+        pj["id"] = oid
+        (out / "options").mkdir(exist_ok=True)
+        (out / f"options/{oid}.json").write_text(json.dumps(pj, ensure_ascii=False), encoding="utf-8")
+        index.append({"id": oid, "label": label})
+    shutil.rmtree(out / "_tmp", ignore_errors=True)
+    (out / "index.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    return out
