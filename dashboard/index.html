@@ -99,18 +99,19 @@ async function load(){
 }
 function refresh(){
   $('#s-tempo').textContent=P.song.tempo;$('#s-cuts').textContent=P.timeline.length;
-  $('#s-dur').textContent=fmt(P.timeline.at(-1)?.end||0);$('#s-mom').textContent=P.moments.length;
+  {const [a,b]=win();$('#s-dur').innerHTML=Math.round(b-a)+' שנ׳ (מתוך השיר: <bdi dir="ltr">'+fmt(a)+'–'+fmt(b)+'</bdi>)'}$('#s-mom').textContent=P.moments.length;
   draw();inspector();moments();
 }
 
 // ---------- timeline ----------
+function win(){const T=P.timeline;return T.length?[T[0].start,T.at(-1).end]:[0,P.song.duration]}
 function draw(){
   const W=tl.clientWidth, H=tl.clientHeight, dpr=devicePixelRatio||1;
   tl.width=W*dpr;tl.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
-  const D=P.song.duration, x=t=>t/D*W;
+  const [T0,T1]=win(), x=t=>(t-T0)/(T1-T0)*W;
   for(const s of P.song.sections){ctx.fillStyle=COL[s.kind]+'22';ctx.fillRect(x(s.start),0,x(s.end)-x(s.start),H)}
   const wv=P.song.waveform, mid=35;ctx.fillStyle='#ffffff40';
-  wv.forEach((v,i)=>{const xx=i/wv.length*W;ctx.fillRect(xx,mid-v*28,Math.max(1,W/wv.length),v*56)});
+  wv.forEach((v,i)=>{const tt=i/wv.length*P.song.duration;if(tt<T0||tt>T1)return;ctx.fillRect(x(tt),mid-v*28,Math.max(1,W/wv.length*P.song.duration/(T1-T0)),v*56)});
   const db=new Set(P.song.downbeats);
   for(const b of P.song.beats){ctx.fillStyle=db.has(b)?'#ffffff90':'#ffffff22';ctx.fillRect(x(b),70,1,db.has(b)?14:8)}
   P.timeline.forEach((s,i)=>{
@@ -125,7 +126,7 @@ function draw(){
   ctx.fillStyle='#fff';ctx.fillRect(x(song.currentTime||0),0,2,H);
 }
 tl.addEventListener('click',e=>{
-  const r=tl.getBoundingClientRect(), t=(e.clientX-r.left)/r.width*P.song.duration;
+  const r=tl.getBoundingClientRect(),[T0,T1]=win(), t=T0+(e.clientX-r.left)/r.width*(T1-T0);
   if(e.offsetY>=90){sel=P.timeline.findIndex(s=>t>=s.start&&t<s.end);refresh()}
   song.currentTime=t;sync(true);draw();
 });
@@ -218,9 +219,9 @@ function fx(s){
   const f=$('#flash');if(s.fx?.flash){f.style.transition='none';f.style.opacity=.6;requestAnimationFrame(()=>{f.style.transition='opacity .15s';f.style.opacity=0})}
 }
 function preview(){if(sel>=0){song.currentTime=P.timeline[sel].start+.001;sync(true);draw()}}
-function loop(){if(P&&!song.paused){sync();draw();$('#time').textContent=fmt(song.currentTime)}requestAnimationFrame(loop)}
+function loop(){if(P&&!song.paused){if(song.currentTime>=win()[1]){song.pause();front.pause();song.currentTime=win()[0];$('#b-play').textContent='▶ נגן'}sync();draw();$('#time').textContent=fmt(song.currentTime)}requestAnimationFrame(loop)}
 loop();
-$('#b-play').onclick=()=>{if(song.paused){song.play();sync(true);$('#b-play').textContent='⏸ עצור'}else{song.pause();front.pause();$('#b-play').textContent='▶ נגן'}};
+$('#b-play').onclick=()=>{if(song.paused){const [a,b]=win();if(song.currentTime<a||song.currentTime>=b)song.currentTime=a;song.play();sync(true);$('#b-play').textContent='⏸ עצור'}else{song.pause();front.pause();$('#b-play').textContent='▶ נגן'}};
 addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();$('#b-play').click()}});
 
 // ---------- actions ----------

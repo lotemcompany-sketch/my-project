@@ -8,9 +8,11 @@ from . import audio, video, planner, template
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 
 
-def create(song_path, clips_dir, out_dir, template_path=None, log=print):
+def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=None):
     out = Path(out_dir); (out / "thumbs").mkdir(parents=True, exist_ok=True)
     tpl = template.load(template_path)
+    if length:
+        tpl["length"] = length
     log("מנתח את השיר...")
     song = audio.analyze_song(song_path)
     log(f"טמפו {song['tempo']} BPM, {len(song['beats'])} ביטים")
@@ -31,6 +33,10 @@ def create(song_path, clips_dir, out_dir, template_path=None, log=print):
                       "width": c["width"], "height": c["height"],
                       "times": c["times"], "motion": c["motion"], "vertical": c["vertical"]})
         moments += ms
+    w0, w1 = audio.best_window(song, tpl["length"])
+    song["window"] = [w0, w1]
+    grid = song["beats"] + [song["duration"]]
+    log(f"הקטע הכי חזק בשיר: {grid[w0]:.1f}s עד {grid[w1]:.1f}s")
     proj = {"version": 1, "song": dict(song, path=str(Path(song_path).resolve())),
             "clips": clips, "moments": moments, "template": tpl}
     proj["timeline"] = planner.build_timeline(proj["song"], moments, tpl)

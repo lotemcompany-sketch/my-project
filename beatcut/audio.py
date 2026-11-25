@@ -83,3 +83,28 @@ def _sections(beats, downbeats, energy, duration, bar_group=4):
         if (b["kind"] == "fast" and a["kind"] != "fast") or b["energy"] - a["energy"] > 0.25:
             b["drop"] = True
     return out
+
+
+def best_window(song, length):
+    """בוחר את הקטע הכי חזק בשיר באורך המבוקש (15–45 שניות), מתחיל ונגמר בתחילת תיבה.
+    מעדיף חלון שהדרופ נמצא ממש בתחילתו — הוק חזק בשניות הראשונות."""
+    beats, e = song["beats"], song["beat_energy"]
+    length = max(15, min(45, length))
+    if song["duration"] <= length + 1:
+        return 0, len(beats)
+    idx = {b: k for k, b in enumerate(beats)}
+    db = sorted(idx[d] for d in song["downbeats"] if d in idx)
+    drops = [s["start"] for s in song["sections"] if s.get("drop")]
+    best, best_v = (0, len(beats)), -1.0
+    for i in db:
+        t0 = beats[i]
+        ends = [d for d in db if d > i and beats[d] - t0 >= length - 2]
+        if not ends or beats[ends[0]] - t0 > length + 3:
+            continue
+        j = ends[0]
+        v = float(np.mean(e[i:j]))
+        if any(0 <= d - t0 <= 4 for d in drops):
+            v += 0.15
+        if v > best_v:
+            best, best_v = (i, j), v
+    return best

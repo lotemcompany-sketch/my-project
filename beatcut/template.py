@@ -17,13 +17,20 @@ DEFAULT = {
     "hook_seconds": 1.5,       # הוק פתיחה: ההרמה הכי חזקה בשניות הראשונות
     "max_reuse": 2,             # כמה פעמים מותר להשתמש באותו רגע
     "prefer_lifts_on_downbeat": True,
+    "lift_lead": 0.8,          # כמה שניות לפני שיא ההרמה נכנסים (רואים את הכניסה)
+    "length": 30,              # אורך הסרטון בשניות (15–45). נבחר הקטע הכי חזק בשיר
 }
+
+PRESETS = Path(__file__).resolve().parent.parent / "templates"
 
 
 def load(path=None):
     t = json.loads(json.dumps(DEFAULT))
     if path:
-        t.update(json.loads(Path(path).read_text(encoding="utf-8")))
+        f = Path(path)
+        if not f.exists():
+            f = PRESETS / f"{path}.json"   # שם פריסט: dance / sport
+        t.update(json.loads(f.read_text(encoding="utf-8")))
     return t
 
 

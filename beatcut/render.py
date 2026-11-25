@@ -9,8 +9,9 @@ def render(project, out_path, log=print):
     W, H, FPS = tpl["width"], tpl["height"], tpl["fps"]
     tmp = Path(tempfile.mkdtemp(prefix="beatcut_"))
     parts = []
+    t_off = project["timeline"][0]["start"]
     for k, s in enumerate(project["timeline"]):
-        f0, f1 = round(s["start"] * FPS), round(s["end"] * FPS)
+        f0, f1 = round((s["start"] - t_off) * FPS), round((s["end"] - t_off) * FPS)
         frames = max(1, f1 - f0)
         speed = s.get("speed", 1.0)
         z = s.get("fx", {}).get("zoom", 1.0)
@@ -31,9 +32,9 @@ def render(project, out_path, log=print):
         log(f"segment {k + 1}/{len(project['timeline'])}")
     lst = tmp / "list.txt"
     lst.write_text("".join(f"file '{p}'\n" for p in parts))
-    end = project["timeline"][-1]["end"]
+    end = project["timeline"][-1]["end"] - t_off
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
-           "-i", project["song"]["path"], "-map", "0:v", "-map", "1:a", "-t", str(end),
+           "-ss", str(t_off), "-i", project["song"]["path"], "-map", "0:v", "-map", "1:a", "-t", str(end),
            "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", str(out_path)]
     subprocess.run(cmd, check=True)
     return str(out_path)
