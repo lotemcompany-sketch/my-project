@@ -3,8 +3,16 @@ import numpy as np
 import librosa
 
 
+def _load(path, sr):
+    """טוען אודיו מכל קובץ (גם מסרטון MOV/MP4) דרך ffmpeg."""
+    import subprocess
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr),
+                          "-f", "f32le", "-"], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.float32).copy(), sr
+
+
 def analyze_song(path, sr=22050):
-    y, sr = librosa.load(path, sr=sr, mono=True)
+    y, sr = _load(path, sr)
     duration = len(y) / sr
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr, units="frames")
