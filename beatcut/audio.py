@@ -11,13 +11,17 @@ def _load(path, sr):
     return np.frombuffer(raw, dtype=np.float32).copy(), sr
 
 
-def analyze_song(path, sr=22050):
+def analyze_song(path, sr=22050, bpm=None):
     y, sr = _load(path, sr)
     duration = len(y) / sr
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
     tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr, units="frames")
     tempo = float(np.atleast_1d(tempo)[0])
     beats = librosa.frames_to_time(beat_frames, sr=sr)
+    if bpm:  # קצב ידוע מראש: רשת ביטים מדויקת במקום זיהוי
+        tempo = float(bpm)
+        beats = np.arange(0.0, duration - 0.05, 60.0 / bpm)
+        beat_frames = librosa.time_to_frames(beats, sr=sr)
     # משלימים את רשת הביטים אחורה עד תחילת השיר (אינטרו שקט), כדי שהטיימליין יתחיל ב-0
     period = 60.0 / tempo if tempo > 0 else 0.5
     pre = []

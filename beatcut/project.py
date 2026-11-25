@@ -8,20 +8,26 @@ from . import audio, video, planner, template
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 
 
-def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=None):
+def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=None, bpm=None):
     out = Path(out_dir); (out / "thumbs").mkdir(parents=True, exist_ok=True)
     tpl = template.load(template_path)
     if length:
         tpl["length"] = length
     log("מנתח את השיר...")
-    song = audio.analyze_song(song_path)
+    song = audio.analyze_song(song_path, bpm=bpm)
     log(f"טמפו {song['tempo']} BPM, {len(song['beats'])} ביטים")
     clips, moments = [], []
     files = sorted(p for p in Path(clips_dir).iterdir() if p.suffix.lower() in VIDEO_EXT)
     for p in files:
         log(f"מנתח קליפ {p.name}...")
-        c = video.analyze_clip(p.resolve())
+        cache = Path(str(p) + ".beatcut.json")
+        if cache.exists():
+            c = json.loads(cache.read_text())
+        else:
+            c = video.analyze_clip(p.resolve())
+            cache.write_text(json.dumps(c))
         ms = video.find_moments(c)
+        # להוסיף שם לכל רגע לפי הקובץ
         for j, m in enumerate(ms):
             m["clip_duration"] = c["duration"]
             m["id"] = f"{p.stem}_{j}"
