@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BeatCut — עורך ריקוד</title>
+<style>
+:root{--bg:#0f0f12;--panel:#18181d;--line:#2a2a31;--txt:#ececf1;--mut:#9a9aa6;--acc:#ff3d7f;
+--fast:#ff3d7f;--groove:#ffb020;--artistic:#4fa8ff;--sel:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,"Segoe UI",Arial,sans-serif}
+header{display:flex;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:17px;margin:0 0 0 12px}
+.stat{color:var(--mut);font-size:13px}.stat b{color:var(--txt)}
+.sp{flex:1}
+button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--mut)}button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+main{display:grid;grid-template-columns:340px 1fr 320px;gap:12px;padding:12px}
+@media (max-width:1100px){main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.panel h2{font-size:13px;margin:0 0 10px;color:var(--mut);font-weight:600}
+#stage{position:relative;width:100%;aspect-ratio:9/16;background:#000;border-radius:10px;overflow:hidden}
+#stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:none}
+#stage video.on{opacity:1}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#badge{position:absolute;top:8px;right:8px;background:#000a;padding:3px 8px;border-radius:6px;font-size:12px}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px}
+#tl-wrap{grid-column:1/-1;order:3}
+#tl{width:100%;height:170px;display:block;cursor:pointer;direction:ltr}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:5px;vertical-align:-1px}
+.row{display:flex;justify-content:space-between;align-items:center;margin:8px 0;gap:8px}
+.row label{color:var(--mut)}
+input[type=range]{width:150px}
+select,input[type=number]{background:#111;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px}
+.moments{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:420px;overflow:auto}
+.mo{position:relative;border:2px solid transparent;border-radius:8px;overflow:hidden;cursor:pointer;background:#000}
+.mo img{width:100%;aspect-ratio:9/16;object-fit:cover;display:block}
+.mo span{position:absolute;bottom:0;inset-inline:0;background:#000b;font-size:10px;padding:2px 4px}
+.mo.cur{border-color:var(--sel)}
+.tag{font-size:10px;padding:1px 6px;border-radius:10px;color:#000;font-weight:700}
+.empty{color:var(--mut);text-align:center;padding:30px 0}
+#toast{position:fixed;bottom:16px;left:16px;background:#222;border:1px solid var(--line);padding:8px 14px;border-radius:8px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 BeatCut</h1>
+  <span class="stat">טמפו <b id="s-tempo">–</b> BPM</span>
+  <span class="stat">חיתוכים <b id="s-cuts">–</b></span>
+  <span class="stat">אורך <b id="s-dur">–</b></span>
+  <span class="stat">רגעים שזוהו <b id="s-mom">–</b></span>
+  <span class="sp"></span>
+  <span class="stat" id="s-render"></span>
+  <button id="b-save">שמירה</button>
+  <button id="b-replan" title="בונה מחדש את כל מה שלא נעול">✨ צור מחדש</button>
+  <button id="b-render" class="pri">רנדר סרטון סופי</button>
+</header>
+<main>
+  <section class="panel">
+    <h2>תצוגה מקדימה (9:16)</h2>
+    <div id="stage"><video id="vA" muted playsinline preload="auto"></video><video id="vB" muted playsinline preload="auto"></video><div id="flash"></div><div id="badge"></div></div>
+    <div class="ctrl"><button id="b-play">▶ נגן</button><span class="stat" id="time">0:00</span></div>
+    <audio id="song" preload="auto"></audio>
+  </section>
+  <section class="panel">
+    <h2>חיתוך נבחר</h2>
+    <div id="insp"><div class="empty">לחץ על חיתוך בטיימליין למטה</div></div>
+  </section>
+  <section class="panel">
+    <h2>החלפת רגע — הכי חזקים קודם</h2>
+    <div class="row"><label>סינון</label>
+      <select id="f-style"><option value="match">לפי סוג הקטע</option><option value="all">הכל</option><option value="fast">מהיר</option><option value="groove">גרוב</option><option value="artistic">אומנותי</option><option value="lift">הרמות בלבד</option></select></div>
+    <div class="moments" id="moments"></div>
+  </section>
+  <section class="panel" id="tl-wrap">
+    <h2>טיימליין — כל חיתוך יושב על ביט · קווים בהירים = תחילת תיבה</h2>
+    <canvas id="tl"></canvas>
+    <div class="legend"><span><i style="background:var(--fast)"></i>מהיר / דרופ</span><span><i style="background:var(--groove)"></i>גרוב</span><span><i style="background:var(--artistic)"></i>אומנותי</span><span>🔒 נעול · ★ הוק · ⚡ אפקט דרופ</span></div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const COL={fast:getCss('--fast'),groove:getCss('--groove'),artistic:getCss('--artistic')};
+const KIND={fast:'מהיר',groove:'גרוב',artistic:'אומנותי'};
+function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+let P=null, sel=-1, curSeg=-1, front=$('#vA'), back=$('#vB');
+const song=$('#song'), tl=$('#tl'), ctx=tl.getContext('2d');
+const media=p=>'/media?p='+encodeURIComponent(p);
+const base=p=>p.split('/').pop();
+const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2500)}
+
+async function load(){
+  P=await (await fetch('/api/project')).json();
+  song.src=media(P.song.path);
+  refresh();
+}
+function refresh(){
+  $('#s-tempo').textContent=P.song.tempo;$('#s-cuts').textContent=P.timeline.length;
+  $('#s-dur').textContent=fmt(P.timeline.at(-1)?.end||0);$('#s-mom').textContent=P.moments.length;
+  draw();inspector();moments();
+}
+
+// ---------- timeline ----------
+function draw(){
+  const W=tl.clientWidth, H=tl.clientHeight, dpr=devicePixelRatio||1;
+  tl.width=W*dpr;tl.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  const D=P.song.duration, x=t=>t/D*W;
+  for(const s of P.song.sections){ctx.fillStyle=COL[s.kind]+'22';ctx.fillRect(x(s.start),0,x(s.end)-x(s.start),H)}
+  const wv=P.song.waveform, mid=35;ctx.fillStyle='#ffffff40';
+  wv.forEach((v,i)=>{const xx=i/wv.length*W;ctx.fillRect(xx,mid-v*28,Math.max(1,W/wv.length),v*56)});
+  const db=new Set(P.song.downbeats);
+  for(const b of P.song.beats){ctx.fillStyle=db.has(b)?'#ffffff90':'#ffffff22';ctx.fillRect(x(b),70,1,db.has(b)?14:8)}
+  P.timeline.forEach((s,i)=>{
+    const a=x(s.start), w=Math.max(2,x(s.end)-a-1);
+    ctx.fillStyle=COL[s.kind];ctx.globalAlpha=i===sel?1:.75;ctx.fillRect(a,90,w,60);ctx.globalAlpha=1;
+    if(i===sel){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(a+1,91,w-2,58)}
+    ctx.fillStyle='#000';ctx.font='11px system-ui';
+    let lab=(s.locked?'🔒':'')+(s.hook?'★':'')+(s.fx?.flash?'⚡':'');
+    if(w>40)lab+=' '+base(s.clip).replace(/\.\w+$/,'');
+    if(w>14){ctx.save();ctx.beginPath();ctx.rect(a,90,w,60);ctx.clip();ctx.fillText(lab,a+3,106);ctx.fillText(s.beats+'b',a+3,142);ctx.restore()}
+  });
+  ctx.fillStyle='#fff';ctx.fillRect(x(song.currentTime||0),0,2,H);
+}
+tl.addEventListener('click',e=>{
+  const r=tl.getBoundingClientRect(), t=(e.clientX-r.left)/r.width*P.song.duration;
+  if(e.offsetY>=90){sel=P.timeline.findIndex(s=>t>=s.start&&t<s.end);refresh()}
+  song.currentTime=t;sync(true);draw();
+});
+addEventListener('resize',()=>P&&draw());
+
+// ---------- inspector ----------
+function inspector(){
+  const el=$('#insp');const s=P.timeline[sel];
+  if(!s){el.innerHTML='<div class="empty">לחץ על חיתוך בטיימליין למטה</div>';return}
+  const clip=P.clips.find(c=>c.path===s.clip);
+  el.innerHTML=`
+   <div class="row"><b>#${sel+1} · ${base(s.clip)}</b><span class="tag" style="background:${COL[s.kind]}">${KIND[s.kind]}</span></div>
+   <div class="row"><label>זמן בשיר</label><span dir="ltr">${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s</span></div>
+   <div class="row"><label>אורך בביטים</label><span><button data-a="b-">−</button> <b>${s.beats}</b> <button data-a="b+">+</button></span></div>
+   <div class="row"><label>נקודת כניסה בקליפ</label><span><button data-a="i-">−0.1</button> <b>${s.in.toFixed(2)}s</b> <button data-a="i+">+0.1</button></span></div>
+   <div class="row"><input type="range" id="in-r" min="0" max="${Math.max(0,(clip?.duration||1)-(s.end-s.start)*s.speed).toFixed(2)}" step="0.04" value="${s.in}" style="width:100%"></div>
+   <div class="row"><label>מהירות</label><select id="spd">${[0.5,0.7,0.85,1,1.25,1.5].map(v=>`<option ${v==s.speed?'selected':''}>${v}</option>`).join('')}</select></div>
+   <div class="row"><label>זום פאנץ'</label><select id="zm">${[1,1.08,1.12,1.2].map(v=>`<option ${v==(s.fx?.zoom||1)?'selected':''}>${v}</option>`).join('')}</select></div>
+   <div class="row"><label>פלאש בכניסה</label><input type="checkbox" id="fl" ${s.fx?.flash?'checked':''}></div>
+   <div class="row"><label>נעילה (לא ישתנה ב"צור מחדש")</label><input type="checkbox" id="lk" ${s.locked?'checked':''}></div>
+   <div class="row"><label>ציון רגע</label><span>${(s.moment_score??0).toFixed(2)} · הרמה ${(s.lift??0).toFixed(2)}</span></div>`;
+  el.querySelectorAll('button[data-a]').forEach(b=>b.onclick=()=>edit(b.dataset.a));
+  $('#in-r').oninput=e=>{s.in=+e.target.value;s.locked=true;preview()};
+  $('#in-r').onchange=()=>refresh();
+  $('#spd').onchange=e=>{s.speed=+e.target.value;s.locked=true;refresh()};
+  $('#zm').onchange=e=>{s.fx={...s.fx,zoom:+e.target.value};s.locked=true;refresh()};
+  $('#fl').onchange=e=>{s.fx={...s.fx,flash:e.target.checked};s.locked=true;refresh()};
+  $('#lk').onchange=e=>{s.locked=e.target.checked;refresh()};
+}
+function edit(a){
+  const s=P.timeline[sel];
+  if(a==='i-')s.in=Math.max(0,+(s.in-.1).toFixed(3));
+  if(a==='i+')s.in=+(s.in+.1).toFixed(3);
+  if(a==='b+'||a==='b-')setBeats(sel,s.beats+(a==='b+'?1:-1));
+  s.locked=true;refresh();preview();
+}
+function setBeats(k,n){
+  const T=P.timeline, s=T[k], B=P.song.beats, grid=[...B,P.song.duration];
+  if(n<1)return;
+  const delta=n-s.beats, nx=T[k+1];
+  if(!nx){if(s.start_beat+n>B.length)return}
+  else if(nx.beats-delta<1){ // בולע את הבא
+    if(T[k+2]===undefined&&delta>nx.beats)return;
+    n=s.beats+nx.beats;T.splice(k+1,1);
+  } else {nx.beats-=delta;nx.start_beat+=delta;nx.start=grid[nx.start_beat]}
+  s.beats=n;s.end=grid[s.start_beat+n];
+}
+// ---------- moments ----------
+function moments(){
+  const el=$('#moments'), s=P.timeline[sel], f=$('#f-style').value;
+  let list=P.moments.slice();
+  if(f==='lift')list.sort((a,b)=>b.lift-a.lift);
+  else if(f==='match'&&s)list=list.filter(m=>m.style===s.kind||(s.kind==='groove'));
+  else if(f!=='all'&&f!=='match')list=list.filter(m=>m.style===f);
+  el.innerHTML=list.slice(0,60).map(m=>`<div class="mo ${s&&s.clip===m.clip&&Math.abs(s.in-m.start)<2?'cur':''}" data-id="${m.id}" title="${base(m.clip)} @${m.peak.toFixed(1)}s">
+     <img src="/${m.thumb}" loading="lazy"><span><span class="tag" style="background:${COL[m.style]}">${m.score.toFixed(2)}</span> ${m.lift>.5?'⬆':''}</span></div>`).join('')||'<div class="empty">אין רגעים</div>';
+  el.querySelectorAll('.mo').forEach(d=>d.onclick=()=>{
+    const s=P.timeline[sel]; if(!s)return toast('קודם בחר חיתוך בטיימליין');
+    const m=P.moments.find(x=>x.id===d.dataset.id), dur=(s.end-s.start)*s.speed;
+    s.clip=m.clip;s.in=+Math.max(0,Math.min(m.peak-.25,m.clip_duration-dur-.05)).toFixed(3);
+    s.moment_score=m.score;s.lift=m.lift;s.locked=true;refresh();preview();
+  });
+}
+$('#f-style').onchange=moments;
+
+// ---------- playback ----------
+function segAt(t){return P.timeline.findIndex(s=>t>=s.start&&t<s.end)}
+function cue(v,s,t){
+  const src=media(s.clip);
+  if(!v.src.endsWith(src))v.src=src;
+  const want=s.in+(t-s.start)*s.speed;
+  if(Math.abs(v.currentTime-want)>.12)v.currentTime=want;
+  v.playbackRate=s.speed;
+}
+function sync(force){
+  const t=song.currentTime, k=segAt(t);
+  if(k<0)return;
+  const s=P.timeline[k];
+  if(k!==curSeg||force){
+    [front,back]=[back,front];cue(front,s,t);front.classList.add('on');back.classList.remove('on');
+    if(!song.paused)front.play().catch(()=>{});else front.pause();
+    curSeg=k;fx(s);
+    const n=P.timeline[k+1];if(n){cue(back,n,n.start);back.pause()}
+    $('#badge').textContent=`#${k+1} · ${KIND[s.kind]} · ${s.beats}b`;
+  } else if(Math.abs(front.currentTime-(s.in+(t-s.start)*s.speed))>.2)cue(front,s,t);
+}
+function fx(s){
+  const z=s.fx?.zoom||1;front.style.transition='none';front.style.transform=`scale(${z})`;
+  requestAnimationFrame(()=>{front.style.transition='transform .4s ease-out';front.style.transform='scale(1)'});
+  const f=$('#flash');if(s.fx?.flash){f.style.transition='none';f.style.opacity=.6;requestAnimationFrame(()=>{f.style.transition='opacity .15s';f.style.opacity=0})}
+}
+function preview(){if(sel>=0){song.currentTime=P.timeline[sel].start+.001;sync(true);draw()}}
+function loop(){if(P&&!song.paused){sync();draw();$('#time').textContent=fmt(song.currentTime)}requestAnimationFrame(loop)}
+loop();
+$('#b-play').onclick=()=>{if(song.paused){song.play();sync(true);$('#b-play').textContent='⏸ עצור'}else{song.pause();front.pause();$('#b-play').textContent='▶ נגן'}};
+addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();$('#b-play').click()}});
+
+// ---------- actions ----------
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+$('#b-save').onclick=async()=>{await post('/api/project',P);toast('נשמר ✓')};
+$('#b-replan').onclick=async()=>{P=await (await post('/api/replan',P)).json();sel=-1;curSeg=-1;refresh();toast('נבנה מחדש — חיתוכים נעולים נשמרו')};
+$('#b-render').onclick=async()=>{
+  const r=await post('/api/render',P);if(!r.ok)return toast('רנדר כבר רץ');
+  const poll=setInterval(async()=>{
+    const st=await (await fetch('/api/render/status')).json();
+    $('#s-render').textContent=st.status==='running'?`מרנדר… ${st.log.at(-1)||''}`:st.status==='done'?'':st.status==='error'?'שגיאה: '+st.error:'';
+    if(st.status==='done'){clearInterval(poll);$('#s-render').innerHTML='<a href="/final.mp4?'+Date.now()+'" target="_blank" style="color:var(--acc)">⬇ הסרטון מוכן</a>'}
+    if(st.status==='error')clearInterval(poll);
+  },1000);
+};
+load();
+</script>
+</body>
+</html>
