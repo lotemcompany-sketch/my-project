@@ -1,0 +1,337 @@
+<title>BeatCut Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Assistant:wght@400;600;700&display=swap">
+<style>
+/* Layout: an edit bay. Preview monitor on one side, the cut sheet (inspector + takes bin) beside it, a beat-ruled timeline strip underneath. Stacks to one column on a phone. */
+:root{
+  --bg:#f5f3f7;--surface:#ffffff;--sunk:#ece8f0;--line:#dcd6e3;--fg:#1d1724;--mut:#6c6478;
+  --accent:#c2185b;--accent-ink:#ffffff;
+  --fast:#d81b60;--groove:#e09100;--artistic:#2f7de1;
+  --ok:#1f8f4e;--warn:#b26a00;
+  --display:"Rubik","Assistant",system-ui,sans-serif;--body:"Assistant",system-ui,sans-serif;
+  --radius:12px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141118;--surface:#1d1922;--sunk:#26212d;--line:#352e3e;--fg:#efeaf4;--mut:#a59cb1;
+  --accent:#ff4f97;--accent-ink:#1a0610;--fast:#ff4f97;--groove:#ffb52e;--artistic:#5ea2ff;--ok:#4fd28a;--warn:#ffb52e;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141118;--surface:#1d1922;--sunk:#26212d;--line:#352e3e;--fg:#efeaf4;--mut:#a59cb1;
+  --accent:#ff4f97;--accent-ink:#1a0610;--fast:#ff4f97;--groove:#ffb52e;--artistic:#5ea2ff;--ok:#4fd28a;--warn:#ffb52e;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:1.6rem;font-weight:800;letter-spacing:-.01em}
+h2{font-size:.8rem;font-weight:700;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+.wrap{max-width:1280px;margin:0 auto;display:grid;gap:16px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.top .meta{color:var(--mut);display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.95rem}
+.top .meta b{color:var(--fg);font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--sunk);font-weight:600;font-size:.9rem}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+.status[data-s="render_requested"] i,.status[data-s="rendering"] i{background:var(--warn)}
+.status[data-s="ready"] i{background:var(--ok)}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;counter-increment:s;min-width:0}
+.steps li::before{content:counter(s);display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--sunk);font:700 .85rem var(--display);margin-left:8px}
+.steps li.here{border-color:var(--accent)}
+.steps li.here::before{background:var(--accent);color:var(--accent-ink)}
+.steps b{font-family:var(--display);font-weight:700}
+.steps p{margin:4px 0 0;color:var(--mut);font-size:.9rem}
+@media (max-width:760px){.steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bay{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr) minmax(0,330px);gap:16px;align-items:start}
+@media (max-width:1050px){.bay{grid-template-columns:minmax(0,300px) minmax(0,1fr)}.bin{grid-column:1/-1}}
+@media (max-width:680px){.bay{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;min-width:0}
+#stage{position:relative;width:100%;max-width:100%;aspect-ratio:9/16;background:#000;border-radius:10px;overflow:hidden;margin-inline:auto}
+@media (max-width:680px){#stage{max-width:300px}}
+#stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
+#stage video.on{opacity:1}
+#badge{position:absolute;top:8px;inset-inline-start:8px;background:rgba(0,0,0,.6);color:#fff;padding:3px 9px;border-radius:6px;font-size:.8rem}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:9px 0;flex-wrap:wrap}
+.row label{color:var(--mut)}
+button,select{font:inherit;color:var(--fg)}
+button{background:var(--sunk);border:1px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer;min-height:40px}
+button:hover{border-color:var(--mut)}
+button:focus-visible,select:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:38px}
+.ctrl{display:flex;gap:8px;align-items:center;margin-top:10px;justify-content:center}
+.time{font-variant-numeric:tabular-nums;color:var(--mut)}
+.chip{display:inline-block;font-size:.75rem;font-weight:700;padding:2px 9px;border-radius:999px;color:#fff}
+.k-fast{background:var(--fast)}.k-groove{background:var(--groove);color:#2a1a00}.k-artistic{background:var(--artistic)}
+.nudge{display:flex;gap:6px;align-items:center}
+.nudge b{min-width:58px;text-align:center;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.empty{color:var(--mut);text-align:center;padding:28px 8px}
+.moments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:460px;overflow:auto}
+@media (max-width:680px){.moments{grid-template-columns:repeat(4,minmax(0,1fr));max-height:none}}
+.mo{position:relative;border:2px solid transparent;border-radius:8px;overflow:hidden;cursor:pointer;background:#000;padding:0;min-height:0}
+.mo img{width:100%;aspect-ratio:9/16;object-fit:cover;display:block}
+.mo .sc{position:absolute;bottom:4px;inset-inline-start:4px}
+.mo .up{position:absolute;top:4px;inset-inline-end:4px;background:rgba(0,0,0,.6);color:#fff;font-size:.7rem;padding:1px 6px;border-radius:6px}
+.mo.cur{border-color:var(--accent)}
+.tlbox{overflow-x:auto;direction:ltr;-webkit-overflow-scrolling:touch}
+#tl{display:block;height:160px;cursor:pointer;touch-action:pan-x}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--mut);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:6px;vertical-align:-1px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.final video{width:100%;max-width:300px;aspect-ratio:9/16;background:#000;border-radius:10px;display:block}
+.final{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.final p{margin:0;color:var(--mut);max-width:60ch}
+.note{color:var(--mut);font-size:.9rem}
+#toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-start:max(16px,env(safe-area-inset-left,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+  <div class="top">
+    <h1>BeatCut Studio</h1>
+    <div class="meta"><span id="m-title">טוען…</span><span>טמפו <b id="m-tempo">–</b> BPM</span><span>חיתוכים <b id="m-cuts">–</b></span><span>אורך <b id="m-len">–</b></span></div>
+    <span class="sp"></span>
+    <span class="status" id="status" data-s="draft"><i></i><span id="status-t">טיוטה</span></span>
+  </div>
+
+  <ol class="steps" aria-label="איך העבודה מתבצעת">
+    <li><b>מעלים לדרייב</b><p>טייקים גולמיים + שיר לתיקייה BeatCut/ריקוד או ספורט</p></li>
+    <li><b>Claude עורך</b><p>בוחר את הקטע החזק בשיר, את ההרמות הכי טובות, וחותך על הביט</p></li>
+    <li class="here"><b>אתה מתקן כאן</b><p>צופה, מחליף רגעים, מזיז חיתוכים, ולוחץ "אשר ושלח לרינדור"</p></li>
+    <li><b>סרטון מוכן</b><p>באיכות מלאה בתיקייה BeatCut/מוכנים, ואם תרצה, מועלה לאינסטגרם</p></li>
+  </ol>
+
+  <div class="bay">
+    <section class="panel" aria-label="תצוגה מקדימה">
+      <h2>תצוגה מקדימה · 9:16</h2>
+      <div id="stage"><video id="vA" muted playsinline preload="auto"></video><video id="vB" muted playsinline preload="auto"></video><div id="badge"></div></div>
+      <div class="ctrl"><button id="b-play" class="pri">▶ נגן</button><span class="time" id="time">0:00</span></div>
+      <audio id="song" preload="auto"></audio>
+    </section>
+
+    <section class="panel" aria-label="חיתוך נבחר">
+      <h2>חיתוך נבחר</h2>
+      <div id="insp"><div class="empty">בחר חיתוך בטיימליין למטה, או לחץ נגן כדי לצפות בעריכה.</div></div>
+    </section>
+
+    <section class="panel bin" aria-label="מאגר רגעים">
+      <h2>החלפת רגע · הכי חזקים קודם</h2>
+      <div class="row"><label for="f-style">הצג</label>
+        <select id="f-style"><option value="match">מתאים לקטע</option><option value="lift">הרמות בלבד</option><option value="all">הכל</option><option value="fast">מהיר</option><option value="groove">גרוב</option><option value="artistic">אומנותי</option></select></div>
+      <div class="moments" id="moments"></div>
+      <p class="note">⬆ = זוהתה הרמה. המספר הוא ציון הרגע (0–1).</p>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="טיימליין">
+    <h2>טיימליין · כל חיתוך מתחיל ונגמר על ביט</h2>
+    <div class="tlbox"><canvas id="tl" tabindex="0" aria-label="טיימליין העריכה"></canvas></div>
+    <div class="legend"><span><i style="background:var(--fast)"></i>מהיר / דרופ</span><span><i style="background:var(--groove)"></i>גרוב</span><span><i style="background:var(--artistic)"></i>אומנותי</span><span>קו ארוך = תחילת תיבה · ★ הוק · 🔒 נערך ידנית</span></div>
+  </section>
+
+  <section class="panel" aria-label="אישור ורינדור">
+    <h2>אישור</h2>
+    <div class="actions">
+      <button id="b-save">שמור טיוטה</button>
+      <button id="b-render" class="pri">אשר ושלח לרינדור</button>
+      <button id="b-reset">חזור לעריכה של Claude</button>
+      <span class="note" id="save-note"></span>
+    </div>
+    <div class="final" id="final" hidden>
+      <video id="final-v" controls playsinline preload="metadata"></video>
+      <p id="final-p"></p>
+    </div>
+  </section>
+</div>
+<div id="toast" dir="rtl" hidden></div>
+
+<script>
+document.documentElement.dir="rtl";document.documentElement.lang="he";
+const $=s=>document.querySelector(s);
+const KIND={fast:'מהיר',groove:'גרוב',artistic:'אומנותי'};
+const STATUS={draft:'טיוטה',render_requested:'ממתין לרינדור',rendering:'ברינדור',ready:'הסרטון מוכן'};
+let P=null, orig=null, sel=-1, curSeg=-1, front=$('#vA'), back=$('#vB'), db=null, docRef=null, remote={};
+const song=$('#song'), tl=$('#tl'), ctx=tl.getContext('2d');
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const base=p=>p.split('/').pop().replace(/\.\w+$/,'');
+const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._h);t._h=setTimeout(()=>t.hidden=true,2600)}
+function win(){const T=P.timeline;return [T[0].start,T.at(-1).end]}
+
+async function boot(){
+  P=await (await fetch('project.json')).json();
+  orig=JSON.parse(JSON.stringify(P.timeline));
+  song.src=P.song.src;
+  refresh();
+  connect();
+}
+async function connect(){
+  db=window.claude?await window.claude.use('db'):null;
+  if(!db){$('#save-note').textContent='כדי לשמור עריכות צריך להיות מחובר ל-claude.ai.';return}
+  docRef=db.doc('projects/'+(P.id||'demo'));
+  docRef.onSnapshot(s=>{
+    remote=s.exists?s.data():{};
+    if(remote.timeline&&!dirty){P.timeline=JSON.parse(JSON.stringify(remote.timeline));curSeg=-1;refresh()}
+    showStatus();
+  },()=>{$('#save-note').textContent='אין חיבור לשמירה כרגע.'});
+}
+let dirty=false;
+function touch(){dirty=true;$('#save-note').textContent='יש שינויים שלא נשמרו'}
+function showStatus(){
+  const s=remote.status||'draft';$('#status').dataset.s=s;$('#status-t').textContent=STATUS[s]||s;
+  $('#b-render').disabled=s==='render_requested'||s==='rendering';
+  const showFinal=s==='ready'||P.hasFinal;
+  $('#final').hidden=!showFinal;
+  if(showFinal){
+    if(!$('#final-v').src)$('#final-v').src='final.mp4';
+    $('#final-p').textContent=remote.message||'זה הסרטון שהכלי ערך לבד, באיכות צפייה. הקובץ המלא נשמר בתיקייה BeatCut/מוכנים בדרייב.';
+  }
+}
+
+function refresh(){
+  const [a,b]=win();
+  $('#m-title').textContent=P.title||'פרויקט';$('#m-tempo').textContent=Math.round(P.song.tempo);
+  $('#m-cuts').textContent=P.timeline.length;$('#m-len').textContent=Math.round(b-a)+' שנ׳';
+  draw();inspector();moments();showStatus();
+}
+
+// ---------- timeline ----------
+function draw(){
+  const [T0,T1]=win(), box=tl.parentElement.clientWidth, W=Math.max(box,(T1-T0)*42), H=160, dpr=devicePixelRatio||1;
+  tl.style.width=W+'px';tl.width=W*dpr;tl.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  const x=t=>(t-T0)/(T1-T0)*W, col={fast:css('--fast'),groove:css('--groove'),artistic:css('--artistic')};
+  for(const s of P.song.sections){if(s.end<T0||s.start>T1)continue;ctx.fillStyle=col[s.kind];ctx.globalAlpha=.10;ctx.fillRect(x(Math.max(s.start,T0)),0,x(Math.min(s.end,T1))-x(Math.max(s.start,T0)),H);ctx.globalAlpha=1}
+  const wv=P.song.waveform,D=P.song.duration;ctx.fillStyle=css('--mut');ctx.globalAlpha=.55;
+  wv.forEach((v,i)=>{const t=i/wv.length*D;if(t<T0||t>T1)return;ctx.fillRect(x(t),36-v*26,Math.max(1,W/wv.length*D/(T1-T0)),v*52)});
+  ctx.globalAlpha=1;
+  const db_=new Set(P.song.downbeats);ctx.fillStyle=css('--fg');
+  for(const b of P.song.beats){if(b<T0||b>T1)continue;const d=db_.has(b);ctx.globalAlpha=d?.8:.3;ctx.fillRect(x(b),68,1,d?14:7)}
+  ctx.globalAlpha=1;
+  P.timeline.forEach((s,i)=>{
+    const a=x(s.start),w=Math.max(2,x(s.end)-a-2);
+    ctx.fillStyle=col[s.kind];ctx.globalAlpha=i===sel?1:.82;ctx.beginPath();ctx.roundRect(a+1,90,w,58,6);ctx.fill();ctx.globalAlpha=1;
+    if(i===sel){ctx.strokeStyle=css('--fg');ctx.lineWidth=2;ctx.stroke()}
+    ctx.fillStyle=s.kind==='groove'?'#2a1a00':'#fff';ctx.font='600 12px Assistant, sans-serif';
+    ctx.save();ctx.beginPath();ctx.rect(a+1,90,w,58);ctx.clip();
+    ctx.fillText((s.hook?'★ ':'')+(s.locked?'🔒 ':'')+base(s.clip),a+6,108);ctx.fillText(s.beats+' ביטים',a+6,140);ctx.restore();
+  });
+  ctx.fillStyle=css('--accent');ctx.fillRect(x(Math.min(Math.max(song.currentTime||T0,T0),T1)),0,2,H);
+}
+function tlTime(clientX){const r=tl.getBoundingClientRect(),[T0,T1]=win();return T0+(clientX-r.left)/r.width*(T1-T0)}
+tl.addEventListener('click',e=>{
+  const t=tlTime(e.clientX),k=P.timeline.findIndex(s=>t>=s.start&&t<s.end);
+  if(k>=0){sel=k;refresh();preview()}
+});
+tl.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();sel=Math.max(0,Math.min(P.timeline.length-1,sel+(e.key==='ArrowRight'?1:-1)));refresh();preview()}
+});
+addEventListener('resize',()=>P&&draw());
+
+// ---------- inspector ----------
+function inspector(){
+  const el=$('#insp'),s=P.timeline[sel];
+  if(!s){el.innerHTML='<div class="empty">בחר חיתוך בטיימליין למטה, או לחץ נגן כדי לצפות בעריכה.</div>';return}
+  const clip=P.clips.find(c=>c.id===s.clip),max=Math.max(0,(clip?.duration||1)-(s.end-s.start)*s.speed);
+  el.innerHTML=`
+   <div class="row"><b>חיתוך ${sel+1} מתוך ${P.timeline.length} · <span id="i-name"></span></b><span class="chip k-${s.kind}">${KIND[s.kind]}</span></div>
+   <div class="row"><label>מקום בשיר</label><span dir="ltr" class="time">${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s</span></div>
+   <div class="row"><label>אורך</label><span class="nudge"><button data-a="b-" aria-label="ביט אחד פחות">−</button><b>${s.beats} ביטים</b><button data-a="b+" aria-label="ביט אחד יותר">+</button></span></div>
+   <div class="row"><label>נקודת כניסה בטייק</label><span class="nudge"><button data-a="i-" aria-label="מוקדם יותר">−0.1</button><b dir="ltr">${s.in.toFixed(2)}s</b><button data-a="i+" aria-label="מאוחר יותר">+0.1</button></span></div>
+   <input type="range" id="in-r" min="0" max="${max.toFixed(2)}" step="0.04" value="${Math.min(s.in,max)}" aria-label="נקודת כניסה">
+   <div class="row"><label for="spd">מהירות</label><select id="spd">${[0.5,0.7,0.85,1,1.25].map(v=>`<option ${v==s.speed?'selected':''} value="${v}">${v===1?'רגילה':v<1?'האטה ×'+v:'האצה ×'+v}</option>`).join('')}</select></div>
+   <div class="row"><label>ציון רגע</label><span>${(s.moment_score??0).toFixed(2)} · הרמה ${(s.lift??0).toFixed(2)}</span></div>
+   <div class="row"><button data-a="prev">→ הקודם</button><button data-a="next">הבא ←</button></div>`;
+  $('#i-name').textContent=base(s.clip);
+  el.querySelectorAll('button[data-a]').forEach(b=>b.onclick=()=>edit(b.dataset.a));
+  $('#in-r').oninput=e=>{s.in=+e.target.value;s.locked=true;touch();preview()};
+  $('#in-r').onchange=()=>refresh();
+  $('#spd').onchange=e=>{s.speed=+e.target.value;s.locked=true;touch();refresh();preview()};
+}
+function edit(a){
+  if(a==='prev'||a==='next'){sel=Math.max(0,Math.min(P.timeline.length-1,sel+(a==='next'?1:-1)));refresh();preview();return}
+  const s=P.timeline[sel];
+  if(a==='i-')s.in=Math.max(0,+(s.in-.1).toFixed(3));
+  if(a==='i+')s.in=+(s.in+.1).toFixed(3);
+  if(a==='b+'||a==='b-')setBeats(sel,s.beats+(a==='b+'?1:-1));
+  s.locked=true;touch();refresh();preview();
+}
+function setBeats(k,n){
+  const T=P.timeline,s=T[k],grid=[...P.song.beats,P.song.duration],nx=T[k+1];
+  if(n<1||!nx)return;
+  const d=n-s.beats;
+  if(nx.beats-d<1){n=s.beats+nx.beats;T.splice(k+1,1)}
+  else{nx.beats-=d;nx.start_beat+=d;nx.start=grid[nx.start_beat]}
+  s.beats=n;s.end=grid[s.start_beat+n];
+}
+
+// ---------- moments bin ----------
+function moments(){
+  const el=$('#moments'),s=P.timeline[sel],f=$('#f-style').value;
+  let list=P.moments.slice();
+  if(f==='lift')list=list.filter(m=>m.lift>.5).sort((a,b)=>b.lift-a.lift);
+  else if(f==='match'&&s)list=list.filter(m=>m.style===s.kind||s.kind==='groove');
+  else if(['fast','groove','artistic'].includes(f))list=list.filter(m=>m.style===f);
+  el.replaceChildren();
+  if(!list.length){el.innerHTML='<div class="empty">אין רגעים בסינון הזה</div>';return}
+  for(const m of list.slice(0,48)){
+    const b=document.createElement('button');b.className='mo'+(s&&s.clip===m.clip&&Math.abs(s.in-(m.peak-.8))<1.2?' cur':'');
+    b.setAttribute('aria-label',base(m.clip)+' בשנייה '+m.peak.toFixed(1));
+    const img=document.createElement('img');img.src=m.thumb;img.loading='lazy';img.alt='';
+    const sc=document.createElement('span');sc.className='chip sc k-'+m.style;sc.textContent=m.score.toFixed(2);
+    b.append(img,sc);
+    if(m.lift>.5){const u=document.createElement('span');u.className='up';u.textContent='⬆';b.append(u)}
+    b.onclick=()=>{
+      const s=P.timeline[sel];if(!s)return toast('קודם בחר חיתוך בטיימליין');
+      const dur=(s.end-s.start)*s.speed;
+      s.clip=m.clip;s.in=+Math.max(0,Math.min(m.peak-(m.lift>.4?.8:.25),m.clip_duration-dur-.05)).toFixed(3);
+      s.moment_score=m.score;s.lift=m.lift;s.locked=true;touch();refresh();preview();
+    };
+    el.append(b);
+  }
+}
+$('#f-style').onchange=moments;
+
+// ---------- playback ----------
+function segAt(t){return P.timeline.findIndex(s=>t>=s.start&&t<s.end)}
+function cue(v,s,t){
+  if(!v.src.endsWith(s.clip))v.src=s.clip;
+  const want=s.in+(t-s.start)*s.speed;
+  if(Math.abs(v.currentTime-want)>.12)v.currentTime=want;
+  v.playbackRate=s.speed;
+}
+function sync(force){
+  const t=song.currentTime,k=segAt(t);if(k<0)return;
+  const s=P.timeline[k];
+  if(k!==curSeg||force){
+    [front,back]=[back,front];cue(front,s,t);front.classList.add('on');back.classList.remove('on');
+    if(!song.paused)front.play().catch(()=>{});else front.pause();
+    curSeg=k;const n=P.timeline[k+1];if(n){cue(back,n,n.start);back.pause()}
+    $('#badge').textContent=`${k+1} · ${KIND[s.kind]} · ${s.beats} ביטים`;
+  }else if(Math.abs(front.currentTime-(s.in+(t-s.start)*s.speed))>.2)cue(front,s,t);
+}
+function preview(){if(sel>=0){song.currentTime=P.timeline[sel].start+.001;sync(true);draw()}}
+function stop(){song.pause();front.pause();$('#b-play').textContent='▶ נגן'}
+(function loop(){
+  if(P&&!song.paused){if(song.currentTime>=win()[1]){stop();song.currentTime=win()[0]}else{sync();draw();$('#time').textContent=fmt(song.currentTime-win()[0])}}
+  requestAnimationFrame(loop);
+})();
+$('#b-play').onclick=()=>{
+  if(song.paused){const [a,b]=win();if(song.currentTime<a||song.currentTime>=b)song.currentTime=a;song.play().then(()=>sync(true)).catch(()=>toast('לא הצלחתי לנגן. נסה שוב.'));$('#b-play').textContent='⏸ עצור'}
+  else stop();
+};
+
+// ---------- save / approve ----------
+async function save(status){
+  if(!docRef)return toast('צריך להיות מחובר ל-claude.ai כדי לשמור');
+  try{
+    await docRef.set({timeline:P.timeline,status,updatedAt:Date.now(),message:status==='draft'?(remote.message||''):''});
+    dirty=false;$('#save-note').textContent=status==='draft'?'נשמר':'נשלח. Claude ירנדר ויעלה לתיקייה מוכנים.';
+    toast(status==='draft'?'הטיוטה נשמרה':'נשלח לרינדור');
+  }catch(e){toast(e?.code==='not_granted'?'אין לך הרשאת עריכה בעמוד הזה':'השמירה נכשלה. נסה שוב.')}
+}
+$('#b-save').onclick=()=>save('draft');
+$('#b-render').onclick=()=>save('render_requested');
+$('#b-reset').onclick=()=>{P.timeline=JSON.parse(JSON.stringify(orig));sel=-1;curSeg=-1;touch();refresh();toast('חזרנו לעריכה של Claude. לחץ שמור כדי לשמור.')};
+
+boot().catch(()=>{$('#insp').innerHTML='<div class="empty">לא הצלחתי לטעון את הפרויקט.</div>'});
+</script>
