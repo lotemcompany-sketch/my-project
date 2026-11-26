@@ -47,6 +47,17 @@ def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=
                       "width": c["width"], "height": c["height"],
                       "times": c["times"], "motion": c["motion"], "vertical": c["vertical"]})
         moments += ms
+    # סנכרון כל הצילומים לציר זמן אחד של ההופעה (סאונד + מראה), נשמר בקאש
+    from . import sync
+    key = Path(clips_dir, "sync.beatcut.json")
+    paths = [c["path"] for c in clips]
+    cached = json.loads(key.read_text()) if key.exists() else {}
+    if sorted(cached.keys()) != sorted(paths):
+        log("מסנכרן את הצילומים לציר ההופעה...")
+        m = sync.sync_clips(paths, log=log)
+        m = sync.visual_fill(m, paths, {c["path"]: c["duration"] for c in clips}, log=log)
+        key.write_text(json.dumps(m)); cached = m
+    song["_perf"] = cached
     if moments:
         top = max(m["clip_quality"] for m in moments) or 1
         for m in moments:

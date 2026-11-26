@@ -15,8 +15,11 @@ def analyze_song(path, sr=22050, bpm=None):
     y, sr = _load(path, sr)
     duration = len(y) / sr
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-    tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr, units="frames")
-    tempo = float(np.atleast_1d(tempo)[0])
+    if bpm:
+        tempo, beat_frames = float(bpm), np.array([], dtype=int)
+    else:
+        tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sr, units="frames")
+        tempo = float(np.atleast_1d(tempo)[0])
     beats = librosa.frames_to_time(beat_frames, sr=sr)
     if bpm:  # קצב ידוע מראש: רשת ביטים מדויקת במקום זיהוי
         tempo = float(bpm)

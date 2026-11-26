@@ -12,6 +12,8 @@ def build_timeline(song, moments, tpl, locked=None, seed=0):
         raise ValueError("לא זוהו ביטים בשיר")
     downbeats = set(song["downbeats"])
     locked = {s["start_beat"]: s for s in (locked or [])}
+    perf = song.get("_perf", {})   # clip -> [(t0, t1, offset)] סנכרון לציר ההופעה
+    used_perf = []                 # רגעים בריקוד שכבר הוצגו (מכל זווית)
     use_count = {}
     used = {}   # clip -> [(a, b)] טווחים שכבר נוצלו מהצילום
     clip_uses = {}
@@ -39,10 +41,11 @@ def build_timeline(song, moments, tpl, locked=None, seed=0):
         on_drop = bool(sec.get("drop")) and abs(sec["start"] - t0) < 0.05
         want_lift = is_hook or on_drop or (tpl["prefer_lifts_on_downbeat"] and t0 in downbeats and kind != "artistic")
         mo, src_in = _pick(moments, kind, dur * speed, used, clip_uses, tpl, want_lift,
-                           segs[-1]["clip"] if segs else None, jitter)
+                           segs[-1]["clip"] if segs else None, jitter, perf, used_perf)
         if mo is None:
             break
         used.setdefault(mo["clip"], []).append((src_in, src_in + dur * speed))
+        used_perf.extend(_perf_span(perf.get(mo["clip"], []), src_in, src_in + dur * speed))
         clip_uses[mo["clip"]] = clip_uses.get(mo["clip"], 0) + 1
         segs.append({
             "start_beat": i, "beats": n, "start": round(t0, 3), "end": round(t1, 3),
@@ -74,11 +77,24 @@ def _in_point(mo, need, tpl, kind):
     return max(0.0, min(src_in, mo["clip_duration"] - need - 0.05))
 
 
+def _perf_span(segs, a, b, step=0.25):
+    """טווחי זמן-הופעה שהחלק [a,b] בקליפ מכסה."""
+    out = []
+    t = a
+    while t <= b:
+        for t0, t1, off in segs:
+            if t0 <= t < t1:
+                out.append((t + off - step, t + off + step))
+                break
+        t += step
+    return out
+
+
 def _overlaps(a, b, ranges, gap=0.6):
     return any(a < y + gap and b > x - gap for x, y in ranges)
 
 
-def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None, jitter=None):
+def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None, jitter=None, perf=None, used_perf=None):
     """בוחר את הרגע הכי טוב שעוד לא נוצל: אף שנייה מהצילום לא חוזרת, ומפזרים בין כל הקליפים."""
     style_ok = {"fast": ("fast", "groove"), "groove": ("groove", "fast", "artistic"), "artistic": ("artistic", "groove")}[kind]
     n_clips = max(1, len({m["clip"] for m in moments if m.get("clip_quality", 1) >= 0.5}))
@@ -90,6 +106,12 @@ def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None, 
         src_in = _in_point(mo, need, tpl, kind)
         if _overlaps(src_in, src_in + need, used.get(mo["clip"], [])):
             continue
+        if perf and perf.get(mo["clip"]):
+            span = _perf_span(perf[mo["clip"]], src_in, src_in + need, 0.5)
+            if not span:
+                continue  # לא יודעים איזה רגע בריקוד זה, אז לא מסתכנים בחזרה
+            if used_perf and any(_overlaps(x, y, used_perf, gap=0.8) for x, y in span):
+                continue  # אותו רגע בריקוד כבר הוצג מזווית אחרת
         cq = mo.get("clip_quality", 1.0)
         if cq < 0.5 and clip_uses.get(mo["clip"], 0) >= tpl.get("max_far_uses", 1):
             continue  # צילום רחוק/חשוך: לכל היותר פעם אחת (פתיח רחב)
