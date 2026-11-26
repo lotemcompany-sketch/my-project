@@ -13,6 +13,7 @@ def main():
     a.add_argument("--out", required=True); a.add_argument("--template", default="dance", help="dance / sport / נתיב לקובץ")
     a.add_argument("--length", type=float, help="אורך בשניות 15–45")
     a.add_argument("--bpm", type=float, help="קצב ידוע של השיר (מדלג על זיהוי)")
+    a.add_argument("--seed", type=int, default=0, help="מספר וריאציה: כל מספר נותן עריכה אחרת")
     a.add_argument("--render", action="store_true")
     d = sub.add_parser("dashboard", help="פתיחת דשבורד עריכה"); d.add_argument("project"); d.add_argument("--port", type=int, default=8765)
     r = sub.add_parser("render", help="רנדר סופי"); r.add_argument("project")
@@ -20,7 +21,7 @@ def main():
     L.add_argument("videos", nargs="+"); L.add_argument("--out", default="templates/my_style.json")
     x = ap.parse_args()
     if x.cmd == "auto":
-        proj = project.create(x.song, x.clips, x.out, x.template, length=x.length, bpm=x.bpm)
+        proj = project.create(x.song, x.clips, x.out, x.template, length=x.length, bpm=x.bpm, seed=x.seed)
         if x.render:
             print(render.render(proj, Path(x.out) / "final.mp4"))
     elif x.cmd == "dashboard":

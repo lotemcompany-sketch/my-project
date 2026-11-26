@@ -2,7 +2,10 @@
 import bisect
 
 
-def build_timeline(song, moments, tpl, locked=None):
+def build_timeline(song, moments, tpl, locked=None, seed=0):
+    import random
+    rng = random.Random(seed)
+    jitter = {id(m): (rng.random() - 0.5) * 0.25 if seed else 0.0 for m in moments}
     beats = song["beats"]
     w0, w1 = song.get("window", [0, len(beats)])
     if not beats:
@@ -36,7 +39,7 @@ def build_timeline(song, moments, tpl, locked=None):
         on_drop = bool(sec.get("drop")) and abs(sec["start"] - t0) < 0.05
         want_lift = is_hook or on_drop or (tpl["prefer_lifts_on_downbeat"] and t0 in downbeats and kind != "artistic")
         mo, src_in = _pick(moments, kind, dur * speed, used, clip_uses, tpl, want_lift,
-                           segs[-1]["clip"] if segs else None)
+                           segs[-1]["clip"] if segs else None, jitter)
         if mo is None:
             break
         used.setdefault(mo["clip"], []).append((src_in, src_in + dur * speed))
@@ -75,10 +78,10 @@ def _overlaps(a, b, ranges, gap=0.6):
     return any(a < y + gap and b > x - gap for x, y in ranges)
 
 
-def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None):
+def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None, jitter=None):
     """בוחר את הרגע הכי טוב שעוד לא נוצל: אף שנייה מהצילום לא חוזרת, ומפזרים בין כל הקליפים."""
     style_ok = {"fast": ("fast", "groove"), "groove": ("groove", "fast", "artistic"), "artistic": ("artistic", "groove")}[kind]
-    n_clips = max(1, len({m["clip"] for m in moments}))
+    n_clips = max(1, len({m["clip"] for m in moments if m.get("clip_quality", 1) >= 0.5}))
     total = sum(clip_uses.values())
     best, best_in, best_v = None, None, -1e9
     for mo in moments:
@@ -87,7 +90,10 @@ def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None):
         src_in = _in_point(mo, need, tpl, kind)
         if _overlaps(src_in, src_in + need, used.get(mo["clip"], [])):
             continue
-        v = mo["score"]
+        cq = mo.get("clip_quality", 1.0)
+        if cq < 0.5 and clip_uses.get(mo["clip"], 0) >= tpl.get("max_far_uses", 1):
+            continue  # צילום רחוק/חשוך: לכל היותר פעם אחת (פתיח רחב)
+        v = mo["score"] + 0.9 * cq + (jitter or {}).get(id(mo), 0.0)
         v += 0.3 if mo["style"] == kind else (0.0 if mo["style"] in style_ok else -0.6)
         if want_lift:
             v += 0.6 * mo["lift"]

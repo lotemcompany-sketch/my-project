@@ -8,7 +8,7 @@ from . import audio, video, planner, template
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi"}
 
 
-def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=None, bpm=None):
+def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=None, bpm=None, seed=0):
     out = Path(out_dir); (out / "thumbs").mkdir(parents=True, exist_ok=True)
     tpl = template.load(template_path)
     if length:
@@ -27,9 +27,14 @@ def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=
             c = video.analyze_clip(p.resolve())
             cache.write_text(json.dumps(c))
         ms = video.find_moments(c)
+        # איכות הקליפ כולו: צילום קרוב, חד ומואר מול צילום רחוק וחשוך מהקהל
+        import numpy as _np
+        cq = (float(_np.percentile(c["motion"], 75)) * _np.log1p(float(_np.median(c["sharpness"])))
+              * min(1.0, float(_np.median(c["brightness"])) / 100))
         # להוסיף שם לכל רגע לפי הקובץ
         for j, m in enumerate(ms):
             m["clip_duration"] = c["duration"]
+            m["clip_quality"] = round(cq, 3)
             m["id"] = f"{p.stem}_{j}"
             if m.get("coverage"):
                 m["thumb"] = None  # רגעי כיסוי בלי תמונה (רבים מדי); זמינים לעריכה האוטומטית
@@ -42,13 +47,17 @@ def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=
                       "width": c["width"], "height": c["height"],
                       "times": c["times"], "motion": c["motion"], "vertical": c["vertical"]})
         moments += ms
+    if moments:
+        top = max(m["clip_quality"] for m in moments) or 1
+        for m in moments:
+            m["clip_quality"] = round(m["clip_quality"] / top, 3)
     w0, w1 = audio.best_window(song, tpl["length"])
     song["window"] = [w0, w1]
     grid = song["beats"] + [song["duration"]]
     log(f"הקטע הכי חזק בשיר: {grid[w0]:.1f}s עד {grid[w1]:.1f}s")
     proj = {"version": 1, "song": dict(song, path=str(Path(song_path).resolve())),
             "clips": clips, "moments": moments, "template": tpl}
-    proj["timeline"] = planner.build_timeline(proj["song"], moments, tpl)
+    proj["timeline"] = planner.build_timeline(proj["song"], moments, tpl, seed=seed)
     save(proj, out)
     log(f"נבנה טיימליין עם {len(proj['timeline'])} חיתוכים")
     return proj
