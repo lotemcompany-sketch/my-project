@@ -85,7 +85,23 @@ def find_moments(clip, min_len=0.6, max_len=6.0):
                 "energy": round(float(seg.mean()), 3), "lift": round(float(vn[i:i + win].max()), 3),
                 "quality": round(float(quality[i:i + win].mean()), 3), "style": "artistic",
             })
+    # 3) כיסוי: חלון כל ~1.5 שניות לאורך כל הצילום, כדי שכל החומר יהיה זמין לעריכה
+    step = int(SAMPLE_FPS * 1.5)
+    taken = [mo["peak"] for mo in moments]
+    for i in range(step // 2, len(t) - step // 2, step):
+        if any(abs(t[i] - p) < 0.9 for p in taken):
+            continue
+        e = float(mn[max(0, i - 5):i + 5].mean())
+        moments.append({
+            "clip": clip["path"], "peak": float(t[i]), "start": float(max(0, t[i] - 1.5)),
+            "end": float(min(clip["duration"], t[i] + 1.5)), "energy": round(e, 3),
+            "lift": round(float(vn[max(0, i - 5):i + 5].max()), 3), "quality": round(float(quality[i]), 3),
+            "style": "fast" if e > 0.5 else ("groove" if e > 0.2 else "artistic"), "coverage": True,
+        })
     for mo in moments:
         mo["score"] = round(0.45 * mo["energy"] + 0.35 * mo["lift"] + 0.2 * mo["quality"]
                             if mo["style"] != "artistic" else 0.5 * mo["quality"] + 0.3 * mo["lift"] + 0.2 * (1 - mo["energy"]), 3)
+    for mo in moments:
+        if mo.get("coverage"):
+            mo["score"] = round(mo["score"] * 0.8, 3)  # רגעי כיסוי קצת פחות מועדפים מפיקים אמיתיים
     return sorted(moments, key=lambda x: -x["score"])

@@ -19,6 +19,8 @@ def export(proj_dir, out_dir, title="", kind="dance"):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", proj["song"]["path"], "-vn",
                     "-c:a", "libmp3lame", "-b:a", "128k", str(out / "song.mp3")], check=True)
     for m in proj["moments"]:
+        if not m.get("thumb"):
+            continue
         src = Path(proj_dir, m["thumb"])
         if src.exists():
             shutil.copy(src, out / m["thumb"])
@@ -67,9 +69,22 @@ def export_options(options, out_dir):
             (out / "finals").mkdir(exist_ok=True); shutil.copy(tmp / "final.mp4", out / f"finals/{oid}.mp4")
             pj["final"] = f"finals/{oid}.mp4"
         pj["id"] = oid
+        # בדשבורד: רק רגעים עם תמונה, הכי חזקים + הרמות (שומר על העמוד קל)
+        ms = sorted((m for m in pj["moments"] if m.get("thumb")), key=lambda m: -m["score"])
+        pick, seen = [], set()
+        for m in ms[:40] + [m for m in ms if m["lift"] > 0.6][:20]:
+            if m["id"] not in seen:
+                seen.add(m["id"]); pick.append(m)
+        pj["moments"] = pick
         (out / "options").mkdir(exist_ok=True)
         (out / f"options/{oid}.json").write_text(json.dumps(pj, ensure_ascii=False), encoding="utf-8")
         index.append({"id": oid, "label": label})
     shutil.rmtree(out / "_tmp", ignore_errors=True)
+    keep = set()
+    for x in index:
+        keep |= {m["thumb"] for m in json.loads((out / f"options/{x['id']}.json").read_text(encoding="utf-8"))["moments"]}
+    for f in (out / "thumbs").iterdir():
+        if f"thumbs/{f.name}" not in keep:
+            f.unlink()
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
     return out

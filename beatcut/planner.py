@@ -10,6 +10,8 @@ def build_timeline(song, moments, tpl, locked=None):
     downbeats = set(song["downbeats"])
     locked = {s["start_beat"]: s for s in (locked or [])}
     use_count = {}
+    used = {}   # clip -> [(a, b)] טווחים שכבר נוצלו מהצילום
+    clip_uses = {}
     segs = []
     i = w0
     cycle = {}
@@ -33,18 +35,12 @@ def build_timeline(song, moments, tpl, locked=None):
         is_hook = t0 - beats[w0] < tpl["hook_seconds"] and not segs
         on_drop = bool(sec.get("drop")) and abs(sec["start"] - t0) < 0.05
         want_lift = is_hook or on_drop or (tpl["prefer_lifts_on_downbeat"] and t0 in downbeats and kind != "artistic")
-        mo = _pick(moments, kind, dur * speed, use_count, tpl["max_reuse"], want_lift, segs[-1]["clip"] if segs else None)
+        mo, src_in = _pick(moments, kind, dur * speed, used, clip_uses, tpl, want_lift,
+                           segs[-1]["clip"] if segs else None)
         if mo is None:
             break
-        key = (mo["clip"], mo["peak"]); use_count[key] = use_count.get(key, 0) + 1
-        align = tpl["align"][kind]
-        src_in = mo["peak"] if align == "peak" else mo["start"]
-        # בפיק: מתחילים קצת לפני כדי שהשיא ייראה מיד עם הביט
-        if align == "peak":
-            # בהרמה נכנסים קצת לפני השיא כדי לראות את הכניסה; השיא נוחת בתוך החיתוך
-            lead = tpl.get("lift_lead", 0.25) if mo["lift"] > 0.4 else 0.25
-            src_in = max(0.0, mo["peak"] - min(lead, dur * speed * 0.6))
-        src_in = max(0.0, min(src_in, mo["clip_duration"] - dur * speed - 0.05))
+        used.setdefault(mo["clip"], []).append((src_in, src_in + dur * speed))
+        clip_uses[mo["clip"]] = clip_uses.get(mo["clip"], 0) + 1
         segs.append({
             "start_beat": i, "beats": n, "start": round(t0, 3), "end": round(t1, 3),
             "kind": kind, "clip": mo["clip"], "in": round(src_in, 3), "speed": speed,
@@ -64,21 +60,42 @@ def _section_at(sections, t):
     return sections[-1]
 
 
-def _pick(moments, kind, need, use_count, max_reuse, want_lift, last_clip=None):
+def _in_point(mo, need, tpl, kind):
+    align = tpl["align"][kind]
+    if align == "peak" or mo["style"] != "artistic":
+        # בהרמה נכנסים קצת לפני השיא כדי לראות את הכניסה; השיא נוחת בתוך החיתוך
+        lead = tpl.get("lift_lead", 0.25) if mo["lift"] > 0.4 else 0.25
+        src_in = mo["peak"] - min(lead, need * 0.6)
+    else:
+        src_in = mo["start"]
+    return max(0.0, min(src_in, mo["clip_duration"] - need - 0.05))
+
+
+def _overlaps(a, b, ranges, gap=0.6):
+    return any(a < y + gap and b > x - gap for x, y in ranges)
+
+
+def _pick(moments, kind, need, used, clip_uses, tpl, want_lift, last_clip=None):
+    """בוחר את הרגע הכי טוב שעוד לא נוצל: אף שנייה מהצילום לא חוזרת, ומפזרים בין כל הקליפים."""
     style_ok = {"fast": ("fast", "groove"), "groove": ("groove", "fast", "artistic"), "artistic": ("artistic", "groove")}[kind]
-    best, best_v = None, -1e9
+    n_clips = max(1, len({m["clip"] for m in moments}))
+    total = sum(clip_uses.values())
+    best, best_in, best_v = None, None, -1e9
     for mo in moments:
         if mo["clip_duration"] < need + 0.05:
             continue
-        u = use_count.get((mo["clip"], mo["peak"]), 0)
-        if u >= max_reuse:
+        src_in = _in_point(mo, need, tpl, kind)
+        if _overlaps(src_in, src_in + need, used.get(mo["clip"], [])):
             continue
-        v = mo["score"] - 0.5 * u
+        v = mo["score"]
         v += 0.3 if mo["style"] == kind else (0.0 if mo["style"] in style_ok else -0.6)
-        if mo["clip"] == last_clip:
-            v -= 0.4  # לא אותו קליפ פעמיים ברצף
         if want_lift:
             v += 0.6 * mo["lift"]
+        if mo["clip"] == last_clip:
+            v -= 0.5  # לא אותו קליפ פעמיים ברצף
+        # פיזור: קליפ שכבר השתמשנו בו הרבה יחסית לאחרים מקבל קנס
+        share = clip_uses.get(mo["clip"], 0) - total / n_clips
+        v -= 0.12 * max(0.0, share)
         if v > best_v:
-            best, best_v = mo, v
-    return best
+            best, best_in, best_v = mo, src_in, v
+    return best, best_in

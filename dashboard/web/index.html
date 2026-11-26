@@ -282,7 +282,7 @@ function setBeats(k,n){
 // ---------- moments bin ----------
 function moments(){
   const el=$('#moments'),s=P.timeline[sel],f=$('#f-style').value;
-  let list=P.moments.slice();
+  let list=P.moments.filter(m=>m.thumb);
   if(f==='lift')list=list.filter(m=>m.lift>.5).sort((a,b)=>b.lift-a.lift);
   else if(f==='match'&&s)list=list.filter(m=>m.style===s.kind||s.kind==='groove');
   else if(['fast','groove','artistic'].includes(f))list=list.filter(m=>m.style===f);

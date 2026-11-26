@@ -31,6 +31,9 @@ def create(song_path, clips_dir, out_dir, template_path=None, log=print, length=
         for j, m in enumerate(ms):
             m["clip_duration"] = c["duration"]
             m["id"] = f"{p.stem}_{j}"
+            if m.get("coverage"):
+                m["thumb"] = None  # רגעי כיסוי בלי תמונה (רבים מדי); זמינים לעריכה האוטומטית
+                continue
             th = out / "thumbs" / f"{m['id']}.jpg"
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(m["peak"]), "-i", str(p),
                             "-frames:v", "1", "-vf", "scale=180:-2", str(th)])
